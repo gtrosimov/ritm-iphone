@@ -44,11 +44,25 @@ targets:
         INFOPLIST_FILE: ''
     dependencies:
       - target: RitmNative
+  RitmNativeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: RitmNativeUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.ritm.runner.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: ''
+        TEST_TARGET_NAME: RitmNative
+    dependencies:
+      - target: RitmNative
 schemes:
   RitmNative:
     build:
       targets:
         RitmNative: all
         RitmNativeTests: [test]
+        RitmNativeUITests: [test]
     test:
-      targets: [RitmNativeTests]
+      targets: [RitmNativeTests, RitmNativeUITests]
