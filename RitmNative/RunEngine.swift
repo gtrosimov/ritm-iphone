@@ -70,9 +70,20 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
             case "bandGymRead":
                 guard let id = payload["id"] as? String else { throw Failure.message("Не указан id занятия.") }
                 reply(.success(try object(database.gymHeartRate?[id] ?? [])))
+            case "bandGymReadMany":
+                guard let ids = payload["ids"] as? [String], ids.count <= 10000,
+                      ids.allSatisfy({ !$0.isEmpty && $0.count <= 100 }) else { throw Failure.message("Некорректные id занятий.") }
+                var readings: [String: [HeartRateSample]] = [:]
+                for id in ids { if let values = database.gymHeartRate?[id], !values.isEmpty { readings[id] = values } }
+                reply(.success(try object(readings)))
+            case "bandGymFinish":
+                guard let id = payload["id"] as? String else { throw Failure.message("Не указан id занятия.") }
+                if activeGymID == id { activeGymID = nil }
+                if status != "running", activeGymID == nil { _ = band.stopScan() }
+                reply(.success(try object(database.gymHeartRate?[id] ?? [])))
             case "bandGymStop":
-                activeGymID = nil
-                if status != "running" { _ = band.stopScan() }
+                if let id = payload["id"] as? String, activeGymID == id { activeGymID = nil }
+                if status != "running", activeGymID == nil { _ = band.stopScan() }
                 reply(.success(["stopped": true]))
             case "bandGymDelete":
                 guard let id = payload["id"] as? String else { throw Failure.message("Не указан id занятия.") }
