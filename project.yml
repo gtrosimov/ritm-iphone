@@ -32,6 +32,7 @@ targets:
       - sdk: WebKit.framework
       - sdk: CoreLocation.framework
       - sdk: CoreMotion.framework
+      - sdk: CoreBluetooth.framework
   RitmNativeTests:
     type: bundle.unit-test
     platform: iOS

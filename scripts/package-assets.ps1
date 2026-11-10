@@ -18,7 +18,7 @@ $RootFiles = @(
     'style.css', 'nutrition.css', 'attendance.css', 'running.css',
     'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'
 )
-$OptionalFiles = @('native-bridge.mjs', 'running-route.mjs', 'running-route.css', 'route-core.mjs', 'route.mjs', 'native.mjs', 'routes.mjs', 'routes.css', 'device-health.mjs', 'device-health.css')
+$OptionalFiles = @('native-bridge.mjs', 'running-route.mjs', 'running-route.css', 'route-core.mjs', 'route.mjs', 'native.mjs', 'routes.mjs', 'routes.css', 'band.mjs', 'band.css', 'device-health.mjs', 'device-health.css')
 $AllowedExtensions = @('.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.mp4', '.woff2', '.json', '.js', '.css', '.txt')
 function Assert-SafePath([string]$Relative) {
     $Parts = $Relative.Replace('\', '/').Split('/')
@@ -69,3 +69,6 @@ $Index = $Index.Replace('<head>', '<head>' + $Meta)
 $Manifest = @{ version = 1; files = @($Copied | Sort-Object) } | ConvertTo-Json -Depth 4
 [IO.File]::WriteAllText((Join-Path $Destination 'asset-manifest.json'), $Manifest, [Text.UTF8Encoding]::new($false))
 Write-Output "Packaged $($Copied.Count) allowlisted assets. Source private directories were not copied."
+
+# Public-safe default: programs and results are restored locally on the iPhone.
+[IO.File]::WriteAllText((Join-Path $Destination 'program.mjs'), "export const EXERCISES={};`nexport const WORKOUTS=[];`n", [Text.UTF8Encoding]::new($false))

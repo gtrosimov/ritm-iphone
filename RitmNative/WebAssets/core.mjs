@@ -1,3 +1,4 @@
+import {validateBandData} from './band.mjs';
 import {validateDeviceHealth} from './device-health.mjs';
 import {validateNutrition} from './nutrition.mjs';
 import {validateAttendance} from './attendance.mjs';
@@ -47,6 +48,7 @@ function validateSession(s,active=false) {
   if(s.status!=='active' && !numeric(s.finishedAt,0,1e15))throw new Error('В копии нет даты завершения.');
   for(const q of s.queue)if(!text(q.exerciseId)||!Number.isInteger(q.round)||q.round<1||!Number.isInteger(q.rounds)||q.rounds<q.round||q.rounds>20||!Number.isInteger(q.pairSize)||q.pairSize<1||q.pairSize>10||!Number.isInteger(q.pairIndex)||q.pairIndex<0||q.pairIndex>=q.pairSize||!Number.isInteger(q.groupIndex)||q.groupIndex<0||q.groupIndex>100||!numeric(q.restAfter,0,3600))throw new Error('В копии повреждены подходы.');
   if(s.snapshot!=null){if(!s.snapshot.workout||!s.snapshot.exercises)throw new Error('В копии повреждена программа тренировки.');validateProgram({workouts:[s.snapshot.workout],exercises:s.snapshot.exercises});if(!s.queue.every(q=>Object.hasOwn(s.snapshot.exercises,q.exerciseId)))throw new Error('В копии потеряно упражнение.');}
+  validateBandData(s.sensorData);
   s.logs.forEach((l,i)=>{
     if(l.exerciseId!==s.queue[i].exerciseId || l.round!==s.queue[i].round || !numeric(l.at,0,1e15) || !optionalText(l.note,1000) || (l.seconds!=null?!numeric(l.seconds,1,86400):(!numeric(l.reps,0,10000)||!Number.isInteger(l.reps))) || (l.weight!=null&&!numeric(l.weight,0,2000)))throw new Error('В копии поврежден результат подхода.');
   });
@@ -54,7 +56,7 @@ function validateSession(s,active=false) {
 function validateProgram(program){
   const fail=()=>{throw new Error('Это не резервная копия Ритм или файл повреждён.');};
   const {exercises,workouts}=program;
-  if(!exercises||typeof exercises!=='object'||Array.isArray(exercises)||!Array.isArray(workouts)||workouts.length>100||!Object.keys(exercises).length||Object.keys(exercises).length>1000)fail();
+  if(!exercises||typeof exercises!=='object'||Array.isArray(exercises)||!Array.isArray(workouts)||workouts.length>100||Object.keys(exercises).length>1000)fail();
   for(const [id,e] of Object.entries(exercises)){
     if(!text(id)||!e||e.id!==id||!text(e.name)||['__proto__','constructor','prototype'].includes(id))fail();
     if(e.reps!=null&&(!Number.isInteger(e.reps)||!numeric(e.reps,0,10000)))fail();

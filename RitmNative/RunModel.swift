@@ -8,6 +8,8 @@ struct RoutePoint: Codable, Equatable {
     var segment: Int
 }
 
+struct HeartRateSample: Codable, Equatable { var at: Double; var bpm: Int }
+
 struct RunRecord: Codable, Equatable {
     var id = UUID().uuidString
     var startedAt: Double
@@ -16,10 +18,11 @@ struct RunRecord: Codable, Equatable {
     var distanceMetres: Double = 0
     var points: [RoutePoint] = []
     var steps: Int? = nil
+    var heartRate: [HeartRateSample]? = nil
     var source = "iphone-native"
 
     private enum CodingKeys: String, CodingKey {
-        case id, startedAt, finishedAt, seconds, distanceMetres, points, steps, source
+        case id, startedAt, finishedAt, seconds, distanceMetres, points, steps, source, heartRate
     }
 
     func encode(to encoder: Encoder) throws {
@@ -31,6 +34,7 @@ struct RunRecord: Codable, Equatable {
         try container.encode(distanceMetres, forKey: .distanceMetres)
         try container.encode(points, forKey: .points)
         try container.encode(steps, forKey: .steps)
+        try container.encode(heartRate, forKey: .heartRate)
         try container.encode(source, forKey: .source)
     }
 }
@@ -133,4 +137,5 @@ struct RunDatabase: Codable {
     var version = 1
     var active: ActiveRun? = nil
     var completed: [RunRecord] = []
+    var gymHeartRate: [String: [HeartRateSample]]? = nil
 }

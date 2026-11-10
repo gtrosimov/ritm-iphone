@@ -12,6 +12,8 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var readableStore = false
     private let location = CLLocationManager()
     private let pedometer = CMPedometer()
+    private let band = MiBandBroadcastManager()
+    private var activeGymID: String?
     private var stepStart: Date?
     private var stepBase = 0
     private var stepToken = UUID()
@@ -32,6 +34,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
                 try store.save(database)
             }
         } catch { persistenceError = error.localizedDescription }
+        band.onMeasurement = { [weak self] at, bpm in self?.recordHeartRate(at: at, bpm: bpm) }
         location.delegate = self
         location.activityType = .fitness
         location.desiredAccuracy = kCLLocationAccuracyBest
@@ -55,6 +58,26 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
                 guard !busy else { throw Failure.message("Предыдущая команда ещё выполняется.") }
             }
             switch action {
+            case "bandState": reply(.success(band.state()))
+            case "bandScan": reply(.success(try band.startScan()))
+            case "bandStop": reply(.success(band.stopScan()))
+            case "bandSelect": reply(.success(try band.select(id: payload["id"] as? String)))
+            case "bandGymStart":
+                guard let id = payload["id"] as? String, !id.isEmpty, id.count <= 100 else { throw Failure.message("Не указан id занятия.") }
+                activeGymID = id
+                if band.state()["selectedId"] is String { _ = try? band.startScan() }
+                reply(.success(["started": id]))
+            case "bandGymRead":
+                guard let id = payload["id"] as? String else { throw Failure.message("Не указан id занятия.") }
+                reply(.success(try object(database.gymHeartRate?[id] ?? [])))
+            case "bandGymStop":
+                activeGymID = nil
+                if status != "running" { _ = band.stopScan() }
+                reply(.success(["stopped": true]))
+            case "bandGymDelete":
+                guard let id = payload["id"] as? String else { throw Failure.message("Не указан id занятия.") }
+                var next = database; next.gymHeartRate?.removeValue(forKey: id); try commit(next)
+                reply(.success(["deleted": id]))
             case "capabilities": reply(.success(capabilities()))
             case "getRunState": reply(.success(try state()))
             case "listRuns": reply(.success(try object(database.completed)))
@@ -95,7 +118,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
     func capabilities() -> [String: Any] {
         ["available": true, "version": 1, "source": "iphone-native",
          "backgroundLocation": true, "nativeSteps": CMPedometer.isStepCountingAvailable(),
-         "healthKit": false, "bluetoothHeartRate": false, "uploads": false,
+         "healthKit": false, "bluetoothHeartRate": true, "heartRateCoverage": "intermittent", "uploads": false,
          "fileSharing": true,
          "locationAuthorization": authorizationName,
          "locationServicesEnabled": CLLocationManager.locationServicesEnabled(),
@@ -109,6 +132,28 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
          "motionAvailable": CMPedometer.isStepCountingAvailable(),
          "motionAuthorization": motionAuthorizationName,
          "persistenceError": persistenceError.map { $0 as Any } ?? NSNull()]
+    }
+
+    private func recordHeartRate(at: Double, bpm: Int) {
+        guard readableStore, !busy else { return }
+        var next = database
+        let sample = HeartRateSample(at: at, bpm: bpm)
+        var changed = false
+        if status == "running", var active = next.active {
+            var values = active.run.heartRate ?? []
+            if values.count < 30000, values.last.map({ at - $0.at >= 5000 }) ?? true {
+                values.append(sample); active.run.heartRate = values; active.checkpoint(now: now); next.active = active; changed = true
+            }
+        }
+        if let id = activeGymID {
+            var values = next.gymHeartRate?[id] ?? []
+            if values.count < 30000, values.last.map({ at - $0.at >= 5000 }) ?? true {
+                values.append(sample)
+                if next.gymHeartRate == nil { next.gymHeartRate = [:] }
+                next.gymHeartRate?[id] = values; changed = true
+            }
+        }
+        if changed { do { try commit(next) } catch { handlePersistenceFailure(error) } }
     }
 
     private func requireLocationPermission() throws {
@@ -130,6 +175,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     private func startSensors() {
+        if band.state()["selectedId"] is String { _ = try? band.startScan() }
         location.startUpdatingLocation()
         guard CMPedometer.isStepCountingAvailable() else { return }
         let token = UUID()
@@ -157,6 +203,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
         if next.active?.status == "running" { next.active?.pause(now: stoppedAt) }
         do { try commit(next) } catch { busy = false; reply(.failure(error)); return }
         location.stopUpdatingLocation()
+        if activeGymID == nil { _ = band.stopScan() }
         finalizeSteps(at: Date(timeIntervalSince1970: stoppedAt / 1000)) { [weak self] count in
             guard let self else { return }
             defer { self.busy = false }

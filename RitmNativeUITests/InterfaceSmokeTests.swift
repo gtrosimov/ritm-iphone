@@ -11,5 +11,8 @@ final class InterfaceSmokeTests: XCTestCase {
         settings.tap()
         let bundledStatus = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "На iPhone")).firstMatch
         XCTAssertTrue(bundledStatus.waitForExistence(timeout: 10), "Native bridge unavailable: \(app.debugDescription)")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(addProgram.waitForExistence(timeout: 30), "Saved empty app failed to reopen: \(app.debugDescription)")
     }
 }

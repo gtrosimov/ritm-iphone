@@ -1,22 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleDisplayName</key><string>Ритм</string>
-<key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
-<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0.0</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>LSRequiresIPhoneOS</key><true/>
-<key>UILaunchScreen</key><dict/>
-<key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
-<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
-<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string><string>gps</string></array>
-<key>UIBackgroundModes</key><array><string>location</string></array>
-<key>NSLocationWhenInUseUsageDescription</key><string>Ритм записывает ваш маршрут и расстояние только во время запущенной пробежки.</string>
-<key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>Разрешение нужно, чтобы продолжать запись пробежки, когда экран заблокирован или открыто другое приложение. Маршрут хранится на iPhone.</string>
-<key>NSMotionUsageDescription</key><string>Ритм считывает реальные шаги за время пробежки. Если запретить доступ, число шагов останется неизвестным.</string>
-<key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><false/></dict>
-<key>ITSAppUsesNonExemptEncryption</key><false/>
-</dict></plist>
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Ритм</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+		<string>gps</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>bluetooth-central</string>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Ритм записывает ваш маршрут и расстояние только во время запущенной пробежки.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Разрешение нужно, чтобы продолжать запись пробежки, когда экран заблокирован или открыто другое приложение. Маршрут хранится на iPhone.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Ритм считывает реальные шаги за время пробежки. Если запретить доступ, число шагов останется неизвестным.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Ритм принимает передаваемый пульс выбранного браслета во время тренировок. Вы выбираете своё устройство в приложении.</string>
+</dict>
+</plist>

@@ -1,9 +1,10 @@
 {
-  "version": 1,
   "files": [
     "app.mjs",
     "attendance.css",
     "attendance.mjs",
+    "band.css",
+    "band.mjs",
     "core.mjs",
     "device-health.css",
     "device-health.mjs",
@@ -67,5 +68,6 @@
     "vendor/leaflet.css",
     "vendor/leaflet.js",
     "workout-editor.mjs"
-  ]
+  ],
+  "version": 1
 }
