@@ -1,0 +1,54 @@
+name: RitmNative
+options:
+  minimumXcodeGenVersion: 2.38.0
+  deploymentTarget:
+    iOS: '16.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    PRODUCT_BUNDLE_IDENTIFIER: local.ritm.runner
+    TARGETED_DEVICE_FAMILY: '1'
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: RitmNative/Info.plist
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+targets:
+  RitmNative:
+    type: application
+    platform: iOS
+    sources:
+      - path: RitmNative
+        excludes:
+          - Info.plist
+          - WebAssets
+      - path: RitmNative/WebAssets
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: RitmNative
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - sdk: WebKit.framework
+      - sdk: CoreLocation.framework
+      - sdk: CoreMotion.framework
+  RitmNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RitmNativeTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.ritm.runner.tests
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: ''
+    dependencies:
+      - target: RitmNative
+schemes:
+  RitmNative:
+    build:
+      targets:
+        RitmNative: all
+        RitmNativeTests: [test]
+    test:
+      targets: [RitmNativeTests]

@@ -1,0 +1,57 @@
+.run-page{display:grid;gap:18px;color:var(--text,#f4f6ef)}
+.run-page h1{font-size:clamp(27px,7.5vw,38px);line-height:1.08;margin:8px 0 14px;letter-spacing:-1.3px}
+.run-page h2,#run-profile h2,#run-record h2{font-size:19px;margin:0 0 14px;letter-spacing:-.4px}
+.run-page p{line-height:1.55;margin:10px 0}
+.run-hero{padding:24px 20px;border-radius:22px;background:linear-gradient(145deg,#28352a,#1a2520);border:1px solid #40543a}
+.run-hero>p{color:#ccd7ca}
+.run-hero .run-eyebrow{font-size:10px;font-weight:800;letter-spacing:1.8px;color:#ccf777;margin:0}
+.run-goal-date{color:#ccf777;font-size:13px;font-weight:700;margin:18px 0}
+.run-hero button{font-size:12px;max-width:100%}
+.run-card{padding:20px;border:1px solid #303b36;border-radius:20px;background:#19211e;min-width:0}
+.run-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.run-section-head h2{margin-bottom:0}
+.run-week-label{display:flex;align-items:center;gap:8px;color:#b4c0b5;font-size:12px}
+.run-week-label select{background:#101714;color:#ccf777;border:1px solid #42513f;border-radius:10px;padding:9px;font:inherit;min-height:42px}
+.run-date-range{font-size:12px;color:#a9b9ab}
+.run-phase{color:#ccf777;font-weight:750;font-size:15px}
+.run-page .section-note{font-size:12px;color:#aebcb1;line-height:1.6}
+.run-page .run-coordination{padding:0 4px;margin:0}
+.run-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;text-align:center;padding:16px 8px;border-radius:16px;background:#18201c}
+.run-stats>div{display:grid;gap:7px;min-width:0}
+.run-stats strong{font-size:24px;color:#ccf777;line-height:1}
+.run-stats span{font-size:10px;color:#b2beb3;line-height:1.4}
+.run-slots{margin-top:18px;border-top:1px solid #334037}
+.run-slot{display:grid;grid-template-columns:48px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid #2c3830}
+.run-slot:last-child{border-bottom:0;padding-bottom:0}
+.run-slot>div:first-child{display:grid;align-content:start;gap:5px}
+.run-slot b{font-size:14px;color:#ccf777}
+.run-slot small{font-size:11px;color:#aebdaf}
+.run-slot strong{font-size:13px}
+.run-slot p{font-size:11px;color:#b0bdb3;margin:5px 0 0;line-height:1.5}
+.run-entry{padding:15px 0;border-top:1px solid #334036}
+.run-entry:last-child{padding-bottom:0}
+.run-entry-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.run-entry-head strong{font-size:13px}
+.run-delete{font-size:11px!important;color:#e3bdb7!important;min-height:42px;padding:8px!important;white-space:nowrap}
+.run-entry-values{display:flex;gap:15px;flex-wrap:wrap;font-size:13px;color:#ccf777;margin-top:6px}
+.run-page .run-note{font-size:12px;color:#c4d0c4;white-space:pre-wrap;overflow-wrap:anywhere}
+.run-chart{margin:20px 0 0}
+.run-chart figcaption{font-size:12px;font-weight:700;color:#dbe7d8}
+.run-chart svg{display:block;width:100%;height:auto;max-height:240px;overflow:visible}
+.run-chart text{fill:#b7c8aa;font-size:10px}
+.run-chart-path{fill:none;stroke:#ccf777;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.run-chart circle{fill:#ccf777;stroke:#18201c;stroke-width:2}
+.run-goal-line{stroke:#788565;stroke-width:1;stroke-dasharray:4 4}
+.run-page details>summary{cursor:pointer;font-size:13px;line-height:1.5;color:#c7d6bf;min-height:30px}
+.run-chart ul{font-size:12px;line-height:1.8;padding-left:18px;color:#bdcbbd}
+.run-safety a{color:#ccf777;text-underline-offset:3px}
+.run-safety p{font-size:12px;color:#bac8bd}
+.run-check{display:flex;align-items:flex-start;gap:10px;font-size:13px;line-height:1.5;margin:20px 0 10px}
+.run-check input{accent-color:#ccf777;width:20px;height:20px;flex:none;margin:0}
+.run-form-error{font-size:13px;line-height:1.5;color:#ffbbb1;min-height:20px}
+#run-profile,#run-record{display:grid;gap:10px}
+#run-profile .entry-fields,#run-record .entry-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#run-profile .section-note,#run-record .section-note{font-size:12px;line-height:1.6;color:#b8c6ba;margin:0}
+#run-record textarea{resize:vertical;min-height:80px}
+.run-page button:focus-visible,.run-page select:focus-visible,#run-profile input:focus-visible,#run-record input:focus-visible,#run-record textarea:focus-visible{outline:2px solid #ccf777;outline-offset:3px}
+@media(max-width:360px){.run-card{padding:16px}.run-hero{padding:20px 16px}.run-stats strong{font-size:21px}.run-page{gap:14px}.run-entry-values{gap:10px}}
