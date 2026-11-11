@@ -7,6 +7,22 @@ const clone = value => structuredClone(value);
 const numeric = (n,min=0,max=1000000) => typeof n==='number' && Number.isFinite(n) && n>=min && n<=max;
 const text = s => typeof s==='string' && s.length>0 && s.length<=500;
 const optionalText=(v,max=5000)=>v==null||(typeof v==='string'&&v.length<=max);
+export const formatTarget=e=>e.seconds!=null?`${e.seconds} сек`:`${e.repsText||e.reps} повт.${e.repsSuffix?` ${e.repsSuffix}`:''}${e.weight!=null?` · ${e.weight} кг${e.assisted?' помощи':''}`:''}`;
+// The update payload is supplied locally; public builds carry no personal program.
+export function applyProgramUpdate(data,update){
+  if(!update||data.settings?.programUpdate===update.id)return false;
+  if(!text(update.id)||!update.exercises||typeof update.exercises!=='object'||Array.isArray(update.exercises))throw new Error('Некорректное обновление программы.');
+  const allowed=new Set(['name','reps','weight','seconds','move','muscles','steps','mistakes','assisted','note','uncertain','repsText','repsSuffix']);
+  const patches=Object.entries(update.exercises);
+  for(const [id,patch]of patches)if(['__proto__','constructor','prototype'].includes(id)||!patch||typeof patch!=='object'||Array.isArray(patch)||Object.keys(patch).some(k=>!allowed.has(k)))throw new Error('Некорректное обновление упражнения.');
+  for(const exercises of [data.program?.exercises,data.active?.snapshot?.exercises]){
+    if(!exercises)continue;
+    for(const [id,patch]of patches)if(Object.hasOwn(exercises,id))Object.assign(exercises[id],clone(patch));
+  }
+  data.settings??={};data.settings.programUpdate=update.id;
+  validateBackup({format:1,...data});
+  return true;
+}
 function groupOK(g) {
   return g && Array.isArray(g.ids) && g.ids.length>0 && g.ids.length<=10 && g.ids.every(text)
     && Number.isInteger(g.rounds) && g.rounds>0 && g.rounds<=20 && numeric(g.rest,0,3600);
@@ -82,7 +98,7 @@ function validateProgram(program){
     if(e.seconds!=null&&!numeric(e.seconds,1,86400))fail();
     if(e.weight!=null&&!numeric(e.weight,0,2000))fail();
     if(e.reps==null&&e.seconds==null)fail();
-    for(const key of ['note','uncertain','muscles','move'])if(!optionalText(e[key]))fail();
+    for(const key of ['note','uncertain','muscles','move','repsText','repsSuffix'])if(!optionalText(e[key]))fail();
     for(const key of ['steps','mistakes'])if(e[key]!=null&&(!Array.isArray(e[key])||e[key].length>20||!e[key].every(v=>optionalText(v,1000)&&typeof v==='string')))fail();
     if(e.assisted!=null&&typeof e.assisted!=='boolean')fail();
   }

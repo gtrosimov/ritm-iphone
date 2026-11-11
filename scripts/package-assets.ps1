@@ -71,4 +71,4 @@ $Manifest = @{ version = 1; files = @($Copied | Sort-Object) } | ConvertTo-Json 
 Write-Output "Packaged $($Copied.Count) allowlisted assets. Source private directories were not copied."
 
 # Public-safe default: programs and results are restored locally on the iPhone.
-[IO.File]::WriteAllText((Join-Path $Destination 'program.mjs'), "export const EXERCISES={};`nexport const WORKOUTS=[];`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $Destination 'program.mjs'), "export const EXERCISES={};`nexport const WORKOUTS=[];`nexport const PROGRAM_UPDATE=null;`n", [Text.UTF8Encoding]::new($false))
