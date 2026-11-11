@@ -3,6 +3,9 @@ const pad = n => String(n).padStart(2, '0');
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
 const badKeys = new Set(['__proto__', 'prototype', 'constructor']);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const recordedSession = s => s.mode === 'friend'
+  ? s.status === 'done' && Array.isArray(s.logs) && s.logs.length === 0 && Number.isFinite(s.finishedAt) && s.finishedAt >= s.startedAt
+  : Array.isArray(s.logs) && s.logs.length > 0;
 const labels = { done: 'Посещение', missed: 'Пропуск', rest: 'Отдых', planned: 'По плану', untracked: 'До начала учёта' };
 let shownMonth = null;
 let selectedDate = null;
@@ -32,7 +35,7 @@ function scheduledOn(data, key) {
 export function dayStatus(data, value, todayValue = new Date()) {
   const key = dateKey(value), today = dateKey(todayValue);
   if (!key || !today) throw new TypeError('Некорректная дата');
-  const actual = (data.sessions || []).filter(s => Array.isArray(s.logs) && s.logs.length > 0 && dateKey(s.startedAt) === key);
+  const actual = (data.sessions || []).filter(s => recordedSession(s) && dateKey(s.startedAt) === key);
   const scheduled = scheduledOn(data, key);
   const manual = data.attendance?.marks?.[key] || null;
   const tracked = key >= trackingStart(data, today);
@@ -58,7 +61,7 @@ export function monthStats(data, monthKey, todayValue = new Date()) {
     if (state.status === 'done') { attendedDays++; scheduledDays++; }
     else if (state.date < today && state.tracked && state.scheduled.length && state.manual !== 'rest') scheduledDays++;
   }
-  const actual = (data.sessions || []).filter(s => Array.isArray(s.logs) && s.logs.length && dateKey(s.startedAt)?.startsWith(`${monthKey}-`) && dateKey(s.startedAt) <= today);
+  const actual = (data.sessions || []).filter(s => recordedSession(s) && dateKey(s.startedAt)?.startsWith(`${monthKey}-`) && dateKey(s.startedAt) <= today);
   const durationMs = actual.reduce((total, s) => {
     const start = new Date(s.startedAt).getTime(), finish = new Date(s.finishedAt).getTime();
     return total + (s.finishedAt != null && Number.isFinite(finish) && finish >= start ? finish - start : 0);
@@ -157,17 +160,17 @@ export function renderAttendance(data) {
       <div class="att-weekdays" aria-hidden="true">${['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'].map(w => `<span>${w}</span>`).join('')}</div><div class="att-grid">${cells.join('')}</div>
       <div class="att-legend"><span><i class="att-legend-done">✓</i>Посещение</span><span><i class="att-legend-missed">×</i>Пропуск</span><span><i class="att-legend-planned">•</i>План</span><span><i>–</i>Отдых</span></div>
       <p class="att-calendar-note">Учёт с ${esc(prettyDate(trackingStart(data, today)))}. Нажмите день, чтобы отметить посещение или перенести тренировку.</p></section>
-    <section class="att-summary" aria-label="Итоги выбранного месяца"><div class="att-summary-heading"><h2>Этот месяц в цифрах</h2><span>${stats.attendancePercent === null ? 'Пока без оценки' : `${stats.attendancePercent}% посещений`}</span></div><div class="att-stat-grid"><div><strong>${stats.attendedDays}</strong><span>дней в зале</span></div><div><strong>${stats.trainingCount}</strong><span>тренировок с записями</span></div><div><strong>${stats.recordedMinutes}</strong><span>минут записано</span></div></div><p class="section-note att-stat-note">Процент учитывает прошедшие дни по плану и отмеченные посещения. Пустые записи не считаются тренировками. Ручная отметка не добавляет подходы и время.</p></section>
+    <section class="att-summary" aria-label="Итоги выбранного месяца"><div class="att-summary-heading"><h2>Этот месяц в цифрах</h2><span>${stats.attendancePercent === null ? 'Пока без оценки' : `${stats.attendancePercent}% посещений`}</span></div><div class="att-stat-grid"><div><strong>${stats.attendedDays}</strong><span>дней в зале</span></div><div><strong>${stats.trainingCount}</strong><span>записанных тренировок</span></div><div><strong>${stats.recordedMinutes}</strong><span>минут записано</span></div></div><p class="section-note att-stat-note">Процент учитывает прошедшие дни по плану и отмеченные посещения. Завершённая тренировка с другом учитывает посещение и время. Пустые тестовые записи не считаются тренировками. Ручная отметка не добавляет подходы и время.</p></section>
     <section class="att-reminders"><div class="att-reminder-icon" aria-hidden="true">◷</div><div><span class="att-eyebrow">ПУСТЬ КАЛЕНДАРЬ НАПОМНИТ</span><h2>В зал — по расписанию</h2><p>Пн, Вт, Чт, Пт · тренировка в 14:30<br><strong>Напоминание в 14:00 · Москва</strong></p></div><button type="button" class="primary full att-reminder-button" id="att-reminders">Добавить напоминания в Календарь iPhone</button><p class="section-note">Это уведомления Календаря, а не push приложения. Откройте файл и добавьте события в Календарь вручную. После импорта напоминания могут приходить при закрытом приложении, если разрешены уведомления Календаря. Добавляйте расписание один раз, чтобы избежать дублей.</p></section></div>`;
 }
 
 function dateModal(data, key) {
   const state = dayStatus(data, key);
   const pastOrToday = key <= dateKey(new Date());
-  return `<div class="sheet-heading"><div><span class="att-eyebrow">${esc(labels[state.status])}</span><h2>${esc(prettyDate(key, { weekday: 'long', day: 'numeric', month: 'long' }))}</h2></div><button type="button" class="icon-btn" id="att-close" aria-label="Закрыть">×</button></div>
-  <div class="att-date-details"><h3>По плану</h3>${state.scheduled.length ? `<ul>${state.scheduled.map(w => `<li>${esc(w.title)}</li>`).join('')}</ul>` : '<p class="section-note">На этот день тренировок нет.</p>'}<h3>Фактически записано</h3>${state.actual.length ? `<ul>${state.actual.map(s => `<li>${esc(s.title || 'Тренировка')} · ${s.logs.length} записей${s.status === 'partial' ? ' · не завершена' : ''}</li>`).join('')}</ul>` : '<p class="section-note">Записанных подходов нет.</p>'}
+  return `<div class="sheet-heading"><div><span class="att-eyebrow">${esc(labels[state.status])}</span><h2>${esc(prettyDate(key, { weekday: 'long', day: 'numeric', month: 'long' }))}</h2></div></div>
+  <div class="att-date-details"><h3>По плану</h3>${state.scheduled.length ? `<ul>${state.scheduled.map(w => `<li>${esc(w.title)}</li>`).join('')}</ul>` : '<p class="section-note">На этот день тренировок нет.</p>'}<h3>Фактически записано</h3>${state.actual.length ? `<ul>${state.actual.map(s => `<li>${esc(s.title || 'Тренировка')} · ${s.mode === 'friend' ? 'С другом · вне плана' : `${s.logs.length} записей${s.status === 'partial' ? ' · не завершена' : ''}`} </li>`).join('')}</ul>` : '<p class="section-note">Записанных подходов нет.</p>'}
   ${state.manual ? `<p class="att-manual-note">Ручная отметка: ${esc(labels[state.manual])}.</p>` : ''}
-  ${pastOrToday ? `<div class="att-mark-actions"><button type="button" class="primary" data-att-mark="done">Был в зале</button><button type="button" class="secondary" data-att-mark="rest">День отдыха</button><button type="button" class="secondary full" data-att-mark="reset">Сбросить ручную отметку</button></div><p class="section-note">Отметки не создают подходы. Реальная запись с подходами всегда остаётся посещением.</p>` : '<p class="section-note">Будущее посещение можно отметить, когда наступит этот день.</p>'}
+  ${pastOrToday ? `<div class="att-mark-actions"><button type="button" class="primary" data-att-mark="done">Был в зале</button><button type="button" class="secondary" data-att-mark="rest">День отдыха</button><button type="button" class="secondary full" data-att-mark="reset">Сбросить ручную отметку</button></div><p class="section-note">Отметки не создают подходы. Запись с подходами или завершённая тренировка с другом всегда остаётся посещением.</p>` : '<p class="section-note">Будущее посещение можно отметить, когда наступит этот день.</p>'}
   ${state.scheduled.length ? `<form id="att-transfer"><h3>Перенести тренировку</h3><label class="field">Тренировка<select name="att-workout" required>${state.scheduled.map(w => `<option value="${esc(w.id)}">${esc(w.title)}</option>`).join('')}</select></label><label class="field">На дату<input type="date" name="att-destination" required value="${key}"></label><p class="section-note">Можно выбрать любой день недели. Записанные результаты останутся на исходной дате.</p><button type="submit" class="secondary full">Перенести</button></form>` : ''}</div>`;
 }
 

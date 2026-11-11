@@ -190,7 +190,7 @@ export function renderDeviceHealth(data) {
 export function installDeviceHealth(ctx) {
   let pending=null,busy=false,disposed=false;
   const close=()=>{pending=null;ctx.closeModal();};
-  const heading=title=>`<div class="sheet-heading"><h2>${title}</h2><button type="button" class="icon-btn" data-health-action="close" aria-label="Закрыть">×</button></div>`;
+  const heading=title=>`<div class="sheet-heading"><h2>${title}</h2></div>`;
   async function save(fn) {
     if(busy||disposed)return false;busy=true;
     try {const ok=await ctx.mutate(data=>{fn(data);validateDeviceHealth(data.deviceHealth);});if(ok){close();ctx.render();}return ok;}

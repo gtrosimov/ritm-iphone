@@ -2,6 +2,10 @@ import {nativeRequest} from './routes.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const native=()=>typeof window!=='undefined'&&Boolean(window.webkit?.messageHandlers?.ritm);
 let state=null,error='',ctx;
+export function readingsForSession(heartRate,session){
+ const start=Number.isFinite(session.startedAt)?session.startedAt:-Infinity,end=Number.isFinite(session.finishedAt)?session.finishedAt:Infinity;
+ return heartRate.filter(p=>p.at>=start&&p.at<=end);
+}
 export function renderBandStepReading(reading,now=Date.now()){
  const age=reading?now-reading.at:Infinity;
  const fresh=Boolean(reading&&Number.isFinite(reading.at)&&Number.isInteger(reading.total)&&reading.total>=0&&reading.total<=65535&&age>=0&&age<=30000);
@@ -14,7 +18,7 @@ export function renderBandPanel(){return `<section class="run-card band-panel"><
 async function refresh(){if(!native())return;try{state=await nativeRequest('bandState');error='';const el=document.getElementById('band-live');if(el)el.innerHTML=liveHTML();}catch(e){error=e.message;}}
 async function attachReadings(readings){
  for(const values of Object.values(readings))validateBandData({source:'miband-advertisement',coverage:'intermittent',heartRate:values});
- for(let retry=0;retry<3;retry++){for(let n=0;ctx.isBusy?.()&&n<200;n++)await new Promise(r=>setTimeout(r,25));const saved=await ctx.mutate(d=>{for(const [id,heartRate]of Object.entries(readings)){const session=d.sessions.find(s=>s.id===id);if(session&&heartRate.length)session.sensorData={source:'miband-advertisement',coverage:'intermittent',heartRate};}ctx.validate?.(d);});if(saved)return true;await new Promise(r=>setTimeout(r,50));}return false;
+ for(let retry=0;retry<3;retry++){for(let n=0;ctx.isBusy?.()&&n<200;n++)await new Promise(r=>setTimeout(r,25));const saved=await ctx.mutate(d=>{for(const [id,heartRate]of Object.entries(readings)){const session=d.sessions.find(s=>s.id===id);if(session){const bounded=readingsForSession(heartRate,session);if(bounded.length)session.sensorData={source:'miband-advertisement',coverage:'intermittent',heartRate:bounded};}}ctx.validate?.(d);});if(saved)return true;await new Promise(r=>setTimeout(r,50));}return false;
 }
 export function installBand(context){ctx=context;document.addEventListener('click',async event=>{const b=event.target.closest?.('[data-band]');if(!b)return;event.preventDefault();b.disabled=true;try{const action=b.dataset.band;if(action==='scan')state=await nativeRequest('bandScan');if(action==='stop')state=await nativeRequest('bandStop');if(action==='select')state=await nativeRequest('bandSelect',{id:b.dataset.id});if(action==='forget')state=await nativeRequest('bandSelect',{id:null});error='';const el=document.getElementById('band-live');if(el)el.innerHTML=liveHTML();}catch(e){error=e.message;ctx.toast(error,true);}finally{b.disabled=false;}});
  const timer=setInterval(()=>{if(document.getElementById('band-live'))refresh();},2000);
