@@ -35,6 +35,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         } catch { persistenceError = error.localizedDescription }
         band.onMeasurement = { [weak self] at, bpm in self?.recordHeartRate(at: at, bpm: bpm) }
+        band.onSteps = { [weak self] at, total in self?.recordBandSteps(at: at, total: total) }
         location.delegate = self
         location.activityType = .fitness
         location.desiredAccuracy = kCLLocationAccuracyBest
@@ -60,8 +61,26 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
             switch action {
             case "bandState": reply(.success(band.state()))
             case "bandScan": reply(.success(try band.startScan()))
-            case "bandStop": reply(.success(band.stopScan()))
-            case "bandSelect": reply(.success(try band.select(id: payload["id"] as? String)))
+            case "bandStop":
+                let result = band.stopScan()
+                try invalidateBandStepBaseline()
+                reply(.success(result))
+            case "bandSelect":
+                let requestedID = payload["id"] as? String
+                if database.active != nil {
+                    let currentState = band.state()
+                    let currentID = currentState["selectedId"] as? String
+                    let requestedUUID = requestedID.flatMap { UUID(uuidString: $0) }
+                    let currentUUID = currentID.flatMap { UUID(uuidString: $0) }
+                    let sameSelection = requestedID == nil && currentID == nil
+                        || requestedUUID != nil && requestedUUID == currentUUID
+                    guard sameSelection else {
+                        throw Failure.message("Завершите пробежку перед сменой браслета.")
+                    }
+                    reply(.success(currentState))
+                } else {
+                    reply(.success(try band.select(id: requestedID)))
+                }
             case "bandGymStart":
                 guard let id = payload["id"] as? String, !id.isEmpty, id.count <= 100 else { throw Failure.message("Не указан id занятия.") }
                 activeGymID = id
@@ -96,7 +115,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
                 guard database.active == nil else { throw Failure.message("Пробежка уже существует. Продолжите или завершите её.") }
                 try requireLocationPermission()
                 var next = database
-                next.active = ActiveRun(now: now)
+                next.active = ActiveRun(now: now, bandStepReading: band.stepReading)
                 try commit(next)
                 startSensors()
                 reply(.success(try state()))
@@ -107,7 +126,7 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
                 guard status == "paused" else { throw Failure.message("Нет пробежки на паузе.") }
                 try requireLocationPermission()
                 var next = database
-                next.active?.resume(now: now)
+                next.active?.resume(now: now, bandStepReading: band.stepReading)
                 try commit(next)
                 startSensors()
                 reply(.success(try state()))
@@ -129,7 +148,8 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
     func capabilities() -> [String: Any] {
         ["available": true, "version": 1, "source": "iphone-native",
          "backgroundLocation": true, "nativeSteps": CMPedometer.isStepCountingAvailable(),
-         "healthKit": false, "bluetoothHeartRate": true, "heartRateCoverage": "intermittent", "uploads": false,
+         "healthKit": false, "bluetoothHeartRate": true, "heartRateCoverage": "intermittent",
+         "bluetoothSteps": true, "bandStepsCoverage": "intermittent", "uploads": false,
          "fileSharing": true,
          "locationAuthorization": authorizationName,
          "locationServicesEnabled": CLLocationManager.locationServicesEnabled(),
@@ -165,6 +185,21 @@ final class RunEngine: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
         if changed { do { try commit(next) } catch { handlePersistenceFailure(error) } }
+    }
+
+    private func recordBandSteps(at: Double, total: Int) {
+        guard readableStore, !busy, status == "running" else { return }
+        var next = database
+        next.active?.receiveBandSteps(at: at, total: total)
+        next.active?.checkpoint(now: now)
+        do { try commit(next) } catch { handlePersistenceFailure(error) }
+    }
+
+    private func invalidateBandStepBaseline() throws {
+        guard database.active?.run.bandSteps != nil else { return }
+        var next = database
+        next.active?.invalidateBandStepBaseline()
+        try commit(next)
     }
 
     private func requireLocationPermission() throws {

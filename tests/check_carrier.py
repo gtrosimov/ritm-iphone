@@ -30,9 +30,9 @@ class CarrierChecks(unittest.TestCase):
         self.assertIn('pathComponents.contains(".local")', text)
         self.assertIn('URLResponse', text)
 
-    def test_build_is_explicitly_unbuilt_and_unsigned(self):
+    def test_build_is_explicitly_unsigned_and_hardware_status_documented(self):
         text = (ROOT / 'README.md').read_text('utf-8')
-        self.assertIn('UNBUILT', text)
+        self.assertIn('BUILD-STATUS.md', text)
         script = (ROOT / 'scripts/build-macos.sh').read_text('utf-8')
         self.assertIn('CODE_SIGNING_ALLOWED=NO', script)
         self.assertIn('xcodegen generate', script)

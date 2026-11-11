@@ -10,6 +10,67 @@ struct RoutePoint: Codable, Equatable {
 
 struct HeartRateSample: Codable, Equatable { var at: Double; var bpm: Int }
 
+struct BandStepReading: Codable, Equatable {
+    var at: Double
+    var total: Int
+
+    func isFresh(at now: Double) -> Bool {
+        at.isFinite && now.isFinite && (0...65535).contains(total)
+            && now >= at && now - at <= 30_000
+    }
+}
+
+/// A partial run count derived only from observed daily-counter differences.
+/// No reading is distinct from a genuine observed zero; gaps are never filled.
+struct BandSteps: Codable, Equatable {
+    var count: Int? = nil
+    var baseline: Int? = nil
+    var lastTotal: Int? = nil
+    var lastAt: Double? = nil
+    var hasGaps = false
+    var source = "miband-advertisement"
+
+    mutating func beginSegment(reading: BandStepReading?) {
+        baseline = reading?.total
+        lastTotal = reading?.total
+        lastAt = reading?.at
+        if reading != nil, count == nil { count = 0 }
+    }
+
+    mutating func receive(at: Double, total: Int) {
+        guard at.isFinite, (0...65535).contains(total) else { return }
+        if let lastAt, at <= lastAt { return }
+        defer { lastTotal = total; lastAt = at }
+        guard baseline != nil, let previous = lastTotal, let previousAt = lastAt else {
+            baseline = total
+            hasGaps = true
+            return
+        }
+        let elapsed = (at - previousAt) / 1000
+        let delta = total - previous
+        guard elapsed <= 30, delta >= 0, Double(delta) <= elapsed * 6 else {
+            baseline = total
+            hasGaps = true
+            return
+        }
+        count = (count ?? 0) + delta
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case count, baseline, lastTotal, lastAt, hasGaps, source
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(count, forKey: .count)
+        try container.encode(baseline, forKey: .baseline)
+        try container.encode(lastTotal, forKey: .lastTotal)
+        try container.encode(lastAt, forKey: .lastAt)
+        try container.encode(hasGaps, forKey: .hasGaps)
+        try container.encode(source, forKey: .source)
+    }
+}
+
 struct RunRecord: Codable, Equatable {
     var id = UUID().uuidString
     var startedAt: Double
@@ -19,10 +80,11 @@ struct RunRecord: Codable, Equatable {
     var points: [RoutePoint] = []
     var steps: Int? = nil
     var heartRate: [HeartRateSample]? = nil
+    var bandSteps: BandSteps? = nil
     var source = "iphone-native"
 
     private enum CodingKeys: String, CodingKey {
-        case id, startedAt, finishedAt, seconds, distanceMetres, points, steps, source, heartRate
+        case id, startedAt, finishedAt, seconds, distanceMetres, points, steps, source, heartRate, bandSteps
     }
 
     func encode(to encoder: Encoder) throws {
@@ -35,6 +97,7 @@ struct RunRecord: Codable, Equatable {
         try container.encode(points, forKey: .points)
         try container.encode(steps, forKey: .steps)
         try container.encode(heartRate, forKey: .heartRate)
+        try container.encode(bandSteps, forKey: .bandSteps)
         try container.encode(source, forKey: .source)
     }
 }
@@ -48,16 +111,25 @@ struct ActiveRun: Codable {
     var segmentStartedAt: Double
     var segmentPending = true
 
-    init(now: Double) {
+    init(now: Double, bandStepReading: BandStepReading? = nil) {
         run = RunRecord(startedAt: now)
         runningSince = now
         lastCheckpointAt = now
         segmentStartedAt = now
+        // Freshness is sufficient for display, but a cached pre-start counter
+        // would include steps taken before this workout. Only the boundary fits.
+        if let bandStepReading, bandStepReading.isFresh(at: now), bandStepReading.at == now {
+            run.bandSteps = BandSteps()
+            run.bandSteps?.beginSegment(reading: bandStepReading)
+        }
     }
 
     func snapshot(now: Double) -> RunRecord {
         var result = run
         result.seconds = accumulatedSeconds + (runningSince.map { max(0, now - $0) / 1000 } ?? 0)
+        if status == "running", let lastAt = result.bandSteps?.lastAt, now - lastAt > 30_000 {
+            result.bandSteps?.hasGaps = true
+        }
         return result
     }
 
@@ -73,14 +145,40 @@ struct ActiveRun: Codable {
         status = "paused"
         runningSince = nil
         segmentPending = true
+        run.bandSteps?.baseline = nil
     }
 
-    mutating func resume(now: Double) {
+    mutating func resume(now: Double, bandStepReading: BandStepReading? = nil) {
+        // Even a fresh sample received during the pause can contain fewer steps
+        // than the true resume total, so it must not seed the resumed segment.
+        let reading = bandStepReading.flatMap { reading in
+            reading.isFresh(at: now) && reading.at == now ? reading : nil
+        }
+        if reading != nil, run.bandSteps == nil { run.bandSteps = BandSteps() }
+        run.bandSteps?.beginSegment(reading: reading)
         status = "running"
         runningSince = now
         lastCheckpointAt = now
         segmentPending = true
         segmentStartedAt = now
+    }
+
+    mutating func receiveBandSteps(at: Double, total: Int) {
+        guard status == "running", at.isFinite, at >= segmentStartedAt,
+              (0...65535).contains(total) else { return }
+        if run.bandSteps == nil { run.bandSteps = BandSteps() }
+        if run.bandSteps?.baseline == nil, at == segmentStartedAt {
+            run.bandSteps?.beginSegment(reading: BandStepReading(at: at, total: total))
+            return
+        }
+        run.bandSteps?.receive(at: at, total: total)
+    }
+
+    mutating func invalidateBandStepBaseline() {
+        run.bandSteps?.baseline = nil
+        run.bandSteps?.lastTotal = nil
+        run.bandSteps?.lastAt = nil
+        run.bandSteps?.hasGaps = true
     }
 
     // Process death is a recording gap. Keep only elapsed time already saved.
@@ -89,6 +187,7 @@ struct ActiveRun: Codable {
         runningSince = nil
         status = "paused"
         segmentPending = true
+        invalidateBandStepBaseline()
     }
 }
 

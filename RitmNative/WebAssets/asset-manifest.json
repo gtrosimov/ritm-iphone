@@ -1,4 +1,5 @@
 {
+  "version": 1,
   "files": [
     "app.mjs",
     "attendance.css",
@@ -60,6 +61,7 @@
     "route-core.mjs",
     "routes.css",
     "routes.mjs",
+    "run-insights.mjs",
     "running.css",
     "running.mjs",
     "style.css",
@@ -68,6 +70,5 @@
     "vendor/leaflet.css",
     "vendor/leaflet.js",
     "workout-editor.mjs"
-  ],
-  "version": 1
+  ]
 }

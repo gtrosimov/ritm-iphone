@@ -18,7 +18,7 @@ $RootFiles = @(
     'style.css', 'nutrition.css', 'attendance.css', 'running.css',
     'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'
 )
-$OptionalFiles = @('native-bridge.mjs', 'running-route.mjs', 'running-route.css', 'route-core.mjs', 'route.mjs', 'native.mjs', 'routes.mjs', 'routes.css', 'band.mjs', 'band.css', 'device-health.mjs', 'device-health.css')
+$OptionalFiles = @('native-bridge.mjs', 'running-route.mjs', 'running-route.css', 'route-core.mjs', 'route.mjs', 'native.mjs', 'routes.mjs', 'run-insights.mjs', 'routes.css', 'band.mjs', 'band.css', 'device-health.mjs', 'device-health.css')
 $AllowedExtensions = @('.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.mp4', '.woff2', '.json', '.js', '.css', '.txt')
 function Assert-SafePath([string]$Relative) {
     $Parts = $Relative.Replace('\', '/').Split('/')

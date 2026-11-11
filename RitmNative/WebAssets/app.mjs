@@ -8,7 +8,7 @@ import {renderWorkoutManager,renderWorkoutEditor,parseWorkout} from './workout-e
 import {renderNutrition,installNutrition} from './nutrition.mjs';
 import {renderAttendance,installAttendance,dateKey} from './attendance.mjs';
 import {renderRunning,installRunning,runningAsSessions,renderRunningHistory} from './running.mjs';
-const APP_VERSION='2.2';
+const APP_VERSION='2.3';
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clone=v=>structuredClone(v), list=v=>Array.isArray(v)?v:[], app=$('#app'), modal=$('#modal');
 const paths={home:'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',history:'M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2',chart:'M4 20V4M4 20h17M7 15l4-5 4 2 5-7',settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z',arrow:'M5 12h14m-6-6 6 6-6 6',back:'M19 12H5m6-6-6 6 6 6',play:'m8 5 11 7-11 7Z',check:'m5 12 4 4L19 6',clock:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M12 7v5l3 2',close:'m6 6 12 12M6 18 18 6',info:'M12 11v6M12 7v.1M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18',download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',upload:'M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5',undo:'M9 5 3 11l6 6M3 11h11a6 6 0 0 1 0 12',pause:'M8 5v14M16 5v14',bolt:'m13 2-9 12h7l-1 8 10-12h-7Z',weight:'M8 8v8M4 9v6M16 8v8M20 9v6M8 12h8M4 12h4m8 0h4',edit:'m15 4 5 5M4 20l4-1L21 6l-4-4L4 15Z'};

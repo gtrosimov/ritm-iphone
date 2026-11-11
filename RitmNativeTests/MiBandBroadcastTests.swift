@@ -38,4 +38,21 @@ final class MiBandBroadcastTests: XCTestCase {
         let prefix = Data([0xFF, 0xFF]) + packet(88)
         XCTAssertEqual(MiBandBroadcastParser.bpm(from: prefix.dropFirst(2)), 88)
     }
+
+    func testStepsDecodeOnlyExactFEE0PayloadAsLittleEndian() {
+        XCTAssertEqual(MiBandBroadcastParser.steps(serviceUUID: "FEE0", data: Data([0x34, 0x12, 9, 8])), 4660)
+        XCTAssertEqual(MiBandBroadcastParser.steps(serviceUUID: "0000fee0-0000-1000-8000-00805f9b34fb", data: Data([0, 0, 9, 8])), 0)
+        XCTAssertEqual(MiBandBroadcastParser.steps(serviceUUID: "fee0", data: Data([255, 255, 0, 0])), 65535)
+        for uuid in ["FEE1", "180D", "FFEE0", "0000FEE0-0000-1000-8000-00805F9B34FA"] {
+            XCTAssertNil(MiBandBroadcastParser.steps(serviceUUID: uuid, data: Data([1, 0, 0, 0])))
+        }
+        for count in [0, 1, 2, 3, 5, 6] {
+            XCTAssertNil(MiBandBroadcastParser.steps(serviceUUID: "FEE0", data: Data(repeating: 0, count: count)))
+        }
+    }
+
+    func testStepsDataSliceDoesNotAssumeZeroStartIndex() {
+        let packet = Data([255, 255, 0x02, 0x01, 0, 0]).dropFirst(2)
+        XCTAssertEqual(MiBandBroadcastParser.steps(serviceUUID: "FEE0", data: packet), 258)
+    }
 }

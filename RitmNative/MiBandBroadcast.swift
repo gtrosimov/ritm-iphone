@@ -6,6 +6,23 @@ import Foundation
 /// CoreBluetooth's manufacturer Data includes the two-byte company identifier;
 /// the source's manufacturer payload[3] is consequently raw[5] here.
 enum MiBandBroadcastParser {
+    /// Mi Band generations before 7 can broadcast a four-byte FEE0 service
+    /// payload. Its first two bytes are the little-endian daily step counter.
+    /// Protocol facts: https://decoder.theengs.io/devices/Miband.html
+    /// https://github.com/theengs/decoder/blob/development/src/devices/Miband_json.h
+    static func steps(serviceUUID: String, data: Data) -> Int? {
+        let uuid = serviceUUID.uppercased()
+        guard uuid == "FEE0" || uuid == "0000FEE0-0000-1000-8000-00805F9B34FB" else { return nil }
+        let raw = [UInt8](data)
+        guard raw.count == 4 else { return nil }
+        return Int(raw[0]) | (Int(raw[1]) << 8)
+    }
+
+    static func identifiesManufacturer(_ data: Data) -> Bool {
+        let raw = [UInt8](data)
+        return raw.count >= 2 && raw[0] == 0x57 && raw[1] == 0x01
+    }
+
     static func bpm(from manufacturerData: Data) -> Int? {
         // Data slices need not have a zero startIndex. Convert before indexing.
         let raw = [UInt8](manufacturerData)
@@ -28,12 +45,15 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
     /// Unix milliseconds and a real observed BPM, emitted only for the selected
     /// candidate. Repeated advertisements are sampled at most once per second.
     var onMeasurement: ((Double, Int) -> Void)?
+    /// Daily counter, never a workout count. Emitted only for the chosen UUID.
+    var onSteps: ((Double, Int) -> Void)?
 
     private struct Candidate {
         let id: UUID
         var name: String
         var rssi: Int
-        var bpm: Int
+        var bpm: Int?
+        var lastBPMAt: Double?
         var lastSeenAt: Double
     }
 
@@ -49,7 +69,9 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
     private var selectedID: UUID?
     private var candidates: [UUID: Candidate] = [:]
     private var latestReading: Reading?
+    private(set) var stepReading: BandStepReading?
     private var lastEmittedAt: Double?
+    private var lastStepsEmittedAt: Double?
     private var lastError: String?
     private let freshnessMilliseconds: Double = 30_000
     private var now: Double { Date().timeIntervalSince1970 * 1000 }
@@ -97,7 +119,9 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
         scanRequested = false
         central?.stopScan()
         latestReading = nil
+        stepReading = nil
         lastEmittedAt = nil
+        lastStepsEmittedAt = nil
         return state()
     }
 
@@ -118,7 +142,9 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
         }
         // Do not retroactively store discovery readings taken before selection.
         latestReading = nil
+        stepReading = nil
         lastEmittedAt = nil
+        lastStepsEmittedAt = nil
         return state()
     }
 
@@ -127,23 +153,29 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
         if let reading = latestReading, !fresh(reading.at, at: timestamp) {
             latestReading = nil
         }
+        if let reading = stepReading, !reading.isFresh(at: timestamp) {
+            stepReading = nil
+        }
         let rows: [[String: Any]] = candidates.values.sorted {
             if $0.lastSeenAt == $1.lastSeenAt { return $0.id.uuidString < $1.id.uuidString }
             return $0.lastSeenAt > $1.lastSeenAt
         }.map { candidate in
             ["id": candidate.id.uuidString, "name": candidate.name, "rssi": candidate.rssi,
-             "bpm": fresh(candidate.lastSeenAt, at: timestamp) ? candidate.bpm as Any : NSNull(),
+             "bpm": candidate.lastBPMAt.flatMap { fresh($0, at: timestamp) ? candidate.bpm : nil }.map { $0 as Any } ?? NSNull(),
              "lastSeenAt": candidate.lastSeenAt]
         }
         let reading: Any = latestReading.map { item -> Any in
             ["at": item.at, "bpm": item.bpm] as [String: Any]
+        } ?? NSNull()
+        let steps: Any = stepReading.map { item -> Any in
+            ["at": item.at, "total": item.total] as [String: Any]
         } ?? NSNull()
         return ["scanning": central?.isScanning ?? false,
                 "starting": scanRequested && (central == nil || central?.state == .unknown || central?.state == .resetting),
                 "bluetoothState": bluetoothStateName,
                 "authorization": authorizationName,
                 "selectedId": selectedID.map { $0.uuidString as Any } ?? NSNull(),
-                "candidates": rows, "reading": reading,
+                "candidates": rows, "reading": reading, "stepReading": steps,
                 "lastError": lastError.map { $0 as Any } ?? NSNull(),
                 "coverage": "intermittent", "source": "miband-advertisement"]
     }
@@ -154,6 +186,7 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
             if scanRequested { beginScan(central) }
         case .unknown, .resetting:
             latestReading = nil
+            stepReading = nil
         case .poweredOff:
             _ = fail("Включите Bluetooth в настройках iPhone.")
         case .unauthorized:
@@ -167,12 +200,22 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        guard scanRequested, central.isScanning,
-              let manufacturer = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data,
-              let bpm = MiBandBroadcastParser.bpm(from: manufacturer) else { return }
+        guard scanRequested, central.isScanning else { return }
+        let manufacturer = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
+        let bpm = manufacturer.flatMap { MiBandBroadcastParser.bpm(from: $0) }
+        let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data] ?? [:]
+        let total = serviceData.compactMap {
+            MiBandBroadcastParser.steps(serviceUUID: $0.key.uuidString, data: $0.value)
+        }.first
+        guard bpm != nil || total != nil else { return }
         let timestamp = now
         let identifier = peripheral.identifier
-        if candidates[identifier] == nil, candidates.count >= 64 {
+        // Service-only steps may update a known selection. An unselected device
+        // needs manufacturer identification before it enters discovery results.
+        let discoverable = bpm != nil || (total != nil && manufacturer.map {
+            MiBandBroadcastParser.identifiesManufacturer($0)
+        } == true)
+        if discoverable, candidates[identifier] == nil, candidates.count >= 64 {
             // Prefer retaining the user's selected device in discovery results.
             if let oldest = candidates.values.filter({ $0.id != selectedID })
                 .min(by: { $0.lastSeenAt < $1.lastSeenAt }) {
@@ -185,9 +228,21 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
             !CharacterSet.controlCharacters.contains($0)
         }))
         let name = String(cleanedName.prefix(80))
-        candidates[identifier] = Candidate(id: identifier, name: name.isEmpty ? "Устройство 0x0157" : name,
-            rssi: RSSI.intValue, bpm: bpm, lastSeenAt: timestamp)
+        if discoverable || candidates[identifier] != nil {
+            let previous = candidates[identifier]
+            candidates[identifier] = Candidate(id: identifier, name: name.isEmpty ? "Устройство 0x0157" : name,
+                rssi: RSSI.intValue, bpm: bpm ?? previous?.bpm,
+                lastBPMAt: bpm != nil ? timestamp : previous?.lastBPMAt, lastSeenAt: timestamp)
+        }
         guard identifier == selectedID else { return }
+        if let total {
+            stepReading = BandStepReading(at: timestamp, total: total)
+            if lastStepsEmittedAt.map({ timestamp >= $0 && timestamp - $0 < 1000 }) != true {
+                lastStepsEmittedAt = timestamp
+                onSteps?(timestamp, total)
+            }
+        }
+        guard let bpm else { return }
         latestReading = Reading(at: timestamp, bpm: bpm)
         if let lastEmittedAt, timestamp >= lastEmittedAt, timestamp - lastEmittedAt < 1000 { return }
         lastEmittedAt = timestamp
@@ -213,7 +268,9 @@ final class MiBandBroadcastManager: NSObject, CBCentralManagerDelegate {
         scanRequested = false
         central?.stopScan()
         latestReading = nil
+        stepReading = nil
         lastEmittedAt = nil
+        lastStepsEmittedAt = nil
         lastError = message
         return .message(message)
     }
