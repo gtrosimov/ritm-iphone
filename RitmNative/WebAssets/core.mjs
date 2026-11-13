@@ -9,32 +9,42 @@ const text = s => typeof s==='string' && s.length>0 && s.length<=500;
 const optionalText=(v,max=5000)=>v==null||(typeof v==='string'&&v.length<=max);
 export const formatTarget=e=>e.seconds!=null?`${e.seconds} сек`:`${e.repsText||e.reps} повт.${e.repsSuffix?` ${e.repsSuffix}`:''}${e.weight!=null?` · ${e.weight} кг${e.assisted?' помощи':''}`:''}`;
 // The update payload is supplied locally; public builds carry no personal program.
-export function applyProgramUpdate(data,update){
+export function applyProgramUpdate(data,update,depth=0){
   if(!update||data.settings?.programUpdate===update.id)return false;
+  if(depth>8)throw new Error('Слишком длинная цепочка обновлений программы.');
   if(!text(update.id)||!update.exercises||typeof update.exercises!=='object'||Array.isArray(update.exercises))throw new Error('Некорректное обновление программы.');
-  const allowed=new Set(['name','reps','weight','seconds','move','muscles','steps','mistakes','assisted','note','uncertain','repsText','repsSuffix']);
+  const allowed=new Set(['name','reps','weight','seconds','move','muscles','steps','mistakes','assisted','note','uncertain','repsText','repsSuffix','sets']);
   const patches=Object.entries(update.exercises);
   for(const [id,patch]of patches)if(['__proto__','constructor','prototype'].includes(id)||!patch||typeof patch!=='object'||Array.isArray(patch)||Object.keys(patch).some(k=>!allowed.has(k)))throw new Error('Некорректное обновление упражнения.');
-  for(const exercises of [data.program?.exercises,data.active?.snapshot?.exercises]){
+  if(update.previous)applyProgramUpdate(data,update.previous,depth+1);
+  for(const [index,exercises]of [data.program?.exercises,data.active?.snapshot?.exercises].entries()){
     if(!exercises)continue;
-    for(const [id,patch]of patches)if(Object.hasOwn(exercises,id))Object.assign(exercises[id],clone(patch));
+    for(const [id,patch]of patches)if(Object.hasOwn(exercises,id)){const values=clone(patch);if(index===1)delete values.sets;Object.assign(exercises[id],values);}
   }
   data.settings??={};data.settings.programUpdate=update.id;
   validateBackup({format:1,...data});
   return true;
 }
+export function setsForExercise(exercise,group){
+  const count=exercise?.sets??group.rounds;
+  if(!Number.isInteger(count)||count<1||count>20)throw new Error('Количество подходов должно быть целым числом от 1 до 20.');
+  return count;
+}
 function groupOK(g) {
   return g && Array.isArray(g.ids) && g.ids.length>0 && g.ids.length<=10 && g.ids.every(text)
     && Number.isInteger(g.rounds) && g.rounds>0 && g.rounds<=20 && numeric(g.rest,0,3600);
 }
-export function startSession(workout,now=Date.now()) {
+export function startSession(workout,now=Date.now(),exercises={}) {
   if(!workout || !text(workout.id) || !Array.isArray(workout.groups) || !workout.groups.length || workout.groups.length>100 || !workout.groups.every(groupOK))throw new Error('Проверьте упражнения и количество подходов в программе.');
   const queue=[];
   workout.groups.forEach((group,groupIndex)=>{
-    for(let round=1;round<=group.rounds;round++)group.ids.forEach((exerciseId,pairIndex)=>{
-      queue.push({exerciseId,round,rounds:group.rounds,groupIndex,pairIndex,pairSize:group.ids.length,restAfter:pairIndex===group.ids.length-1&&round<group.rounds?group.rest:0});
-    });
+    const counts=Object.fromEntries(group.ids.map(id=>[id,setsForExercise(exercises[id],group)])),rounds=Math.max(...Object.values(counts));
+    for(let round=1;round<=rounds;round++){
+      const ids=group.ids.filter(id=>round<=counts[id]);
+      ids.forEach((exerciseId,pairIndex)=>queue.push({exerciseId,round,rounds:counts[exerciseId],groupIndex,pairSize:ids.length,pairIndex,restAfter:pairIndex===ids.length-1&&round<rounds?group.rest:0}));
+    }
   });
+  if(queue.length>10000)throw new Error('Слишком много подходов в одной тренировке.');
   return {id:globalThis.crypto?.randomUUID?.()||`${now}-${Math.random().toString(36).slice(2)}`,workoutId:workout.id,title:workout.title||'Тренировка',startedAt:now,queue,index:0,logs:[],restUntil:0,status:'active'};
 }
 export function completeStep(session,result,now=Date.now()) {
@@ -56,6 +66,15 @@ export function undoStep(session) {
   if(!next.logs.length)return next;
   next.logs.pop();next.index=Math.max(0,next.index-1);next.restUntil=0;next.status='active';delete next.finishedAt;
   return next;
+}
+export function deferCurrentGroup(session,targetGroupIndex){
+  validateSession(session,true);
+  if(session.mode==='friend'||!Number.isInteger(targetGroupIndex))throw new Error('Выбери другое упражнение из этой тренировки.');
+  const next=clone(session),current=next.queue[next.index].groupIndex,remaining=next.queue.slice(next.index);
+  const chosen=remaining.filter(q=>q.groupIndex===targetGroupIndex);
+  if(targetGroupIndex===current||!chosen.length)throw new Error('Выбери другое упражнение из оставшихся.');
+  next.queue=[...next.queue.slice(0,next.index),...chosen,...remaining.filter(q=>q.groupIndex!==targetGroupIndex&&q.groupIndex!==current),...remaining.filter(q=>q.groupIndex===current)];
+  validateSession(next,true);return next;
 }
 export function remainingSeconds(until,now=Date.now()) {return Math.max(0,Math.ceil(((until||0)-now)/1000));}
 export function startFriendSession(session,now=Date.now()) {
@@ -97,6 +116,7 @@ function validateProgram(program){
     if(e.reps!=null&&(!Number.isInteger(e.reps)||!numeric(e.reps,0,10000)))fail();
     if(e.seconds!=null&&!numeric(e.seconds,1,86400))fail();
     if(e.weight!=null&&!numeric(e.weight,0,2000))fail();
+    if(e.sets!=null&&(!Number.isInteger(e.sets)||!numeric(e.sets,1,20)))fail();
     if(e.reps==null&&e.seconds==null)fail();
     for(const key of ['note','uncertain','muscles','move','repsText','repsSuffix'])if(!optionalText(e[key]))fail();
     for(const key of ['steps','mistakes'])if(e[key]!=null&&(!Array.isArray(e[key])||e[key].length>20||!e[key].every(v=>optionalText(v,1000)&&typeof v==='string')))fail();
