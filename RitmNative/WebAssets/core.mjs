@@ -8,6 +8,15 @@ const numeric = (n,min=0,max=1000000) => typeof n==='number' && Number.isFinite(
 const text = s => typeof s==='string' && s.length>0 && s.length<=500;
 const optionalText=(v,max=5000)=>v==null||(typeof v==='string'&&v.length<=max);
 export const formatTarget=e=>e.seconds!=null?`${e.seconds} сек`:`${e.repsText||e.reps} повт.${e.repsSuffix?` ${e.repsSuffix}`:''}${e.weight!=null?` · ${e.weight} кг${e.assisted?' помощи':''}`:''}`;
+// Prefill from an actual completed set; targets remain independent program data.
+export function exerciseEntryDefaults(exercise,active,sessions=[]){
+  const timed=exercise.seconds!=null;
+  const matches=l=>l?.exerciseId===exercise.id&&(timed?numeric(l.seconds,1,86400):l.seconds==null&&Number.isInteger(l.reps)&&numeric(l.reps,0,10000))&&(l.weight==null||numeric(l.weight,0,2000));
+  let previous=null,source='program';
+  if(active?.mode!=='friend')for(let i=(active?.logs?.length||0)-1;i>=0;i--)if(matches(active.logs[i])){previous=active.logs[i];source='current';break;}
+  if(!previous){let latest=-Infinity;for(const session of sessions){if(session.mode==='friend'||(active?.id&&session.id===active.id))continue;for(const log of session.logs||[]){if(matches(log)&&Number.isFinite(log.at)&&log.at>=latest){previous=log;latest=log.at;source='history';}}}}
+  return {amount:previous?(timed?previous.seconds:previous.reps):(exercise.seconds??exercise.reps),weight:previous?(previous.weight??null):(exercise.weight??null),previous:previous?clone(previous):null,source};
+}
 // The update payload is supplied locally; public builds carry no personal program.
 export function applyProgramUpdate(data,update,depth=0){
   if(!update||data.settings?.programUpdate===update.id)return false;
